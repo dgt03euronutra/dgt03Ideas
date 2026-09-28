@@ -23,7 +23,7 @@ npm run build
 
 ## Publicar en GitHub Pages
 
-El workflow de GitHub Actions de este repositorio ejecuta las pruebas y genera la aplicación cuando se actualiza la rama `main`; después publica `dist/` en GitHub Pages.
+El workflow de GitHub Actions de este repositorio ejecuta las pruebas y genera la aplicación cuando se actualiza la rama `main`; después publica `dist/` en GitHub Pages. Un owner debe habilitar Pages una vez desde los ajustes del repositorio; no se almacena un token personal para activar esta opción.
 
 1. En GitHub, abre **Settings > Pages** y selecciona **GitHub Actions** como origen de publicación.
 2. Sube los cambios a `main` o ejecuta manualmente el workflow **Deploy to GitHub Pages** en la pestaña **Actions**.
