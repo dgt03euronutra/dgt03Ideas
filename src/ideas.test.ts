@@ -178,4 +178,52 @@ describe('tableros de ideas', () => {
     expect(repository.projects).toHaveLength(1);
     confirm.mockRestore();
   });
+
+  it('exporta el proyecto como texto plano en orden de paneles', async () => {
+    const project: IdeaProject = {
+      id: 'export-project',
+      name: 'Proyecto compartido',
+      panels: [
+        { id: 'panel-1', title: 'Primera idea', text: 'Texto **importante**', color: '#d9f17c', columns: 5 },
+        { id: 'panel-2', title: '', text: 'Segunda nota', color: '#ffb795', columns: 5 },
+      ],
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    await repository.saveProject(project);
+    initIdeas(container, repository);
+    await waitForUi();
+    container.querySelector('[data-action="open-project"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    let downloadedBlob: Blob | undefined;
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
+      downloadedBlob = blob;
+      return 'blob:test';
+    });
+    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      expect(this.download).toBe('Proyecto compartido.txt');
+      expect(this.href).toBe('blob:test');
+    });
+
+    container.querySelector('[data-action="export-project"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    expect(downloadedBlob?.type).toBe('text/plain;charset=utf-8');
+    const exportedText = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsText(downloadedBlob!);
+    });
+    expect(exportedText).toBe(
+      'Proyecto compartido\n- Primera idea\nTexto importante\n- Panel sin título\nSegunda nota\n',
+    );
+    expect(createObjectURL).toHaveBeenCalledOnce();
+    expect(click).toHaveBeenCalledOnce();
+    await waitForUi();
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:test');
+    createObjectURL.mockRestore();
+    revokeObjectURL.mockRestore();
+    click.mockRestore();
+  });
 });

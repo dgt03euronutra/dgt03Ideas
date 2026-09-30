@@ -30,6 +30,29 @@ function serializeEditorNode(node: Node): string {
   return contents;
 }
 
+function createProjectText(project: IdeaProject): string {
+  const panels = project.panels.map((panel) => {
+    const title = panel.title.trim() || 'Panel sin título';
+    const text = panel.text.replace(/\*\*([\s\S]+?)\*\*/g, '$1');
+    return `- ${title}\n${text}`;
+  });
+  return [project.name, ...panels].join('\n') + '\n';
+}
+
+function downloadProject(project: IdeaProject): void {
+  const blob = new Blob([createProjectText(project)], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const filename = project.name
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-')
+    .replace(/[. ]+$/g, '')
+    .trim() || 'proyecto';
+  link.href = url;
+  link.download = `${filename}.txt`;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 function createId(): string {
   return crypto.randomUUID();
 }
@@ -155,7 +178,7 @@ export function initIdeas(container: HTMLElement, repository: IdeasRepository): 
           <nav class="breadcrumbs" aria-label="Ruta"><button type="button" data-action="home">Proyectos</button><span>/</span><span>${escapeHtml(project.name)}</span></nav>
           <div class="board-heading">
             <div><p class="eyebrow">PROYECTO</p><h1>${escapeHtml(project.name)}</h1><p class="board-heading__meta">${project.panels.length} ${project.panels.length === 1 ? 'panel de ideas' : 'paneles de ideas'}</p></div>
-            <div class="board-heading__actions"><span class="ideas__save-state" aria-live="polite">${feedback}</span><button class="button button--lime" type="button" data-action="add-panel"><span aria-hidden="true">+</span> Nuevo panel</button></div>
+            <div class="board-heading__actions"><span class="ideas__save-state" aria-live="polite">${feedback}</span><button class="button button--outline" type="button" data-action="export-project"><span aria-hidden="true">↓</span> Exportar .txt</button><button class="button button--lime" type="button" data-action="add-panel"><span aria-hidden="true">+</span> Nuevo panel</button></div>
           </div>
           <div class="board-grid">${panels || '<div class="board-empty"><span aria-hidden="true">✳</span><p>Tu tablero está listo</p><span>Añade un panel para capturar la primera idea.</span><button class="button button--dark" type="button" data-action="add-panel">+ Añadir primer panel</button></div>'}</div>
           <footer class="board-footer"><span>ORDENA TUS IDEAS</span><span>Arrastra el número del encabezado · El panel crece con el texto</span></footer>
@@ -212,6 +235,9 @@ export function initIdeas(container: HTMLElement, repository: IdeasRepository): 
       if (!project) return;
       project.panels.push(createPanel());
       void persist(project).then(renderProject);
+    } else if (action === 'export-project') {
+      const project = activeProject();
+      if (project) downloadProject(project);
     } else if (action === 'delete-panel' && id) {
       const project = activeProject();
       if (!project || !window.confirm('¿Eliminar este panel? Esta acción no se puede deshacer.')) return;
