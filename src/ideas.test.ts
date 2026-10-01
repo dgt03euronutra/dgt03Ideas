@@ -75,8 +75,71 @@ describe('tableros de ideas', () => {
 
     expect(editor.style.height).toBe('196px');
     expect(editor.closest('.idea-panel')?.querySelector('.idea-panel__header .color-picker__current')).toBeTruthy();
-    expect(container.querySelector('[data-field="columns"]')).toBeNull();
+    expect(container.querySelector<HTMLInputElement>('[data-field="columns"]')?.min).toBe('3');
+    expect(container.querySelector<HTMLInputElement>('[data-field="columns"]')?.max).toBe('9');
     expect(container.querySelector('.idea-panel__index')?.getAttribute('draggable')).toBe('true');
+  });
+
+  it('conserva los saltos de línea escritos y los inserta explícitamente con Enter', async () => {
+    const input = container.querySelector<HTMLInputElement>('#new-project-name')!;
+    input.value = 'Saltos';
+    container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await waitForUi();
+    container.querySelector('[data-action="add-panel"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await waitForUi();
+
+    const editor = container.querySelector<HTMLElement>('[data-field="text"]')!;
+    editor.textContent = 'PrimeraSegunda';
+    const range = document.createRange();
+    range.setStart(editor.firstChild!, 'Primera'.length);
+    range.collapse(true);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+    editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+
+    expect(editor.innerHTML).toBe('Primera<br>Segunda');
+    await new Promise((resolve) => window.setTimeout(resolve, 300));
+    expect(repository.projects[0].panels[0].text).toBe('Primera\nSegunda');
+    editor.innerHTML = 'Primera<br><br>Segunda<br>';
+    editor.dispatchEvent(new Event('input', { bubbles: true }));
+    await new Promise((resolve) => window.setTimeout(resolve, 300));
+    expect(repository.projects[0].panels[0].text).toBe('Primera\n\nSegunda\n');
+  });
+
+  it('mantiene la altura mínima cuando el editor solo contiene saltos vacíos', async () => {
+    const input = container.querySelector<HTMLInputElement>('#new-project-name')!;
+    input.value = 'Panel vacío';
+    container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await waitForUi();
+    container.querySelector('[data-action="add-panel"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await waitForUi();
+
+    const editor = container.querySelector<HTMLElement>('[data-field="text"]')!;
+    Object.defineProperty(editor, 'scrollHeight', { configurable: true, value: 1200 });
+    editor.innerHTML = '<br><br><br><br>';
+    editor.dispatchEvent(new Event('input', { bubbles: true }));
+
+    expect(editor.style.height).toBe('');
+    expect(editor.closest('.idea-panel')?.style.minHeight).toBe('');
+  });
+
+  it('ajusta el ancho dentro de los límites de la rejilla', async () => {
+    const input = container.querySelector<HTMLInputElement>('#new-project-name')!;
+    input.value = 'Ancho';
+    container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await waitForUi();
+    container.querySelector('[data-action="add-panel"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await waitForUi();
+
+    const widthControl = container.querySelector<HTMLInputElement>('[data-field="columns"]')!;
+    expect(widthControl.min).toBe('3');
+    expect(widthControl.max).toBe('9');
+    widthControl.value = '11';
+    widthControl.dispatchEvent(new Event('input', { bubbles: true }));
+
+    expect(widthControl.value).toBe('9');
+    expect(widthControl.closest<HTMLElement>('.idea-panel')?.dataset.columns).toBe('9');
+    expect(widthControl.closest('.idea-panel')?.querySelector('.panel-width-control__value')?.textContent).toBe('9/12');
   });
 
   it('muestra un único color actual y permite abrir sus opciones', async () => {

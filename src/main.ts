@@ -26,8 +26,38 @@ function serializeEditorNode(node: Node): string {
   if (node.tagName === 'BR') return '\n';
   const contents = [...node.childNodes].map(serializeEditorNode).join('');
   if (node.tagName === 'STRONG' || node.tagName === 'B') return `**${contents}**`;
-  if ((node.tagName === 'DIV' || node.tagName === 'P') && node.parentElement) return `${contents}\n`;
+  if ((node.tagName === 'DIV' || node.tagName === 'P') && node.parentElement && node.getAttribute('contenteditable') !== 'true') {
+    return `${contents}\n`;
+  }
   return contents;
+}
+
+function insertPlainTextAtSelection(editor: HTMLElement, text: string): void {
+  const selection = window.getSelection();
+  if (!selection) return;
+  let range: Range;
+  if (selection.rangeCount && editor.contains(selection.anchorNode)) {
+    range = selection.getRangeAt(0);
+  } else {
+    range = document.createRange();
+    range.selectNodeContents(editor);
+    range.collapse(false);
+  }
+  range.deleteContents();
+  const fragment = document.createDocumentFragment();
+  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  lines.forEach((line, index) => {
+    if (index > 0) fragment.append(document.createElement('br'));
+    if (line) fragment.append(document.createTextNode(line));
+  });
+  const lastNode = fragment.lastChild;
+  if (lastNode) {
+    range.insertNode(fragment);
+    range.setStartAfter(lastNode);
+  }
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
 }
 
 function createProjectText(project: IdeaProject): string {
@@ -100,6 +130,11 @@ export function initIdeas(container: HTMLElement, repository: IdeasRepository): 
   };
 
   const fitEditor = (editor: HTMLElement): void => {
+    const visibleText = serializeEditorNode(editor).replace(/\*\*/g, '').replace(/\u200B/g, '');
+    if (!visibleText.trim()) {
+      editor.style.height = '';
+      return;
+    }
     editor.style.height = 'auto';
     editor.style.height = `${editor.scrollHeight}px`;
   };
@@ -153,10 +188,15 @@ export function initIdeas(container: HTMLElement, repository: IdeasRepository): 
     }
 
     const panels = project.panels.map((panel, index) => `
-      <article class="idea-panel" data-panel-id="${escapeHtml(panel.id)}" style="--panel-color:${panel.color};--panel-span:${panel.columns}">
+      <article class="idea-panel" data-panel-id="${escapeHtml(panel.id)}" data-columns="${Math.max(3, Math.min(9, panel.columns))}" style="--panel-color:${panel.color}">
         <header class="idea-panel__header">
           <span class="idea-panel__index" draggable="true" title="Arrastra para ordenar" aria-label="Arrastra para ordenar">${String(index + 1).padStart(2, '0')}</span>
           <input class="idea-panel__title" data-field="title" value="${escapeHtml(panel.title)}" maxlength="${MAX_PANEL_TITLE}" placeholder="Título del panel" aria-label="Título del panel">
+          <label class="panel-width-control" title="Ancho del panel">
+            <span class="visually-hidden">Ancho del panel</span>
+            <input data-field="columns" type="range" min="3" max="9" value="${Math.max(3, Math.min(9, panel.columns))}" aria-label="Ancho del panel">
+            <span class="panel-width-control__value">${Math.max(3, Math.min(9, panel.columns))}/12</span>
+          </label>
           <div class="color-picker">
             <button class="color-picker__current" type="button" data-action="toggle-colors" title="Cambiar color" aria-label="Color del panel" aria-expanded="false" style="--swatch-color:${panel.color}"></button>
             <div class="color-picker__options" role="group" aria-label="Colores del panel" hidden>${PANEL_COLORS.map((color) => `<button class="color-swatch${panel.color === color.value ? ' color-swatch--selected' : ''}" type="button" data-action="set-color" data-color="${color.value}" title="${color.name}" aria-label="Color ${color.name}" aria-pressed="${panel.color === color.value}" style="--swatch-color:${color.value}"></button>`).join('')}</div>
@@ -302,11 +342,26 @@ export function initIdeas(container: HTMLElement, repository: IdeasRepository): 
     if (!project || !panel) return;
     if (target.dataset.field === 'title') panel.title = cleanText(target.value, MAX_PANEL_TITLE);
     if (target.dataset.field === 'text' && target instanceof HTMLElement) {
-      panel.text = cleanText(serializeEditorNode(target).replace(/\n$/, ''), MAX_PANEL_TEXT);
+      panel.text = cleanText(serializeEditorNode(target), MAX_PANEL_TEXT);
       updateBoldButton(target);
       fitEditor(target);
     }
+    if (target.dataset.field === 'columns' && target instanceof HTMLInputElement) {
+      panel.columns = Math.max(3, Math.min(9, Number(target.value)));
+      target.value = String(panel.columns);
+      const panelElement = target.closest<HTMLElement>('.idea-panel');
+      if (panelElement) panelElement.dataset.columns = String(panel.columns);
+      target.closest('.panel-width-control')?.querySelector('.panel-width-control__value')?.replaceChildren(`${panel.columns}/12`);
+    }
     scheduleSave(project);
+  });
+
+  container.addEventListener('keydown', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement) || target.dataset.field !== 'text' || event.key !== 'Enter') return;
+    event.preventDefault();
+    insertPlainTextAtSelection(target, '\n');
+    target.dispatchEvent(new Event('input', { bubbles: true }));
   });
 
   const updateBoldButton = (editor: HTMLElement): void => {
@@ -338,8 +393,10 @@ export function initIdeas(container: HTMLElement, repository: IdeasRepository): 
     if (!(target instanceof Element) || !target.closest('[data-field="text"]')) return;
     event.preventDefault();
     const text = event.clipboardData?.getData('text/plain') ?? '';
-    document.execCommand('insertText', false, text);
-    target.closest('[data-field="text"]')?.dispatchEvent(new Event('input', { bubbles: true }));
+    const editor = target.closest<HTMLElement>('[data-field="text"]');
+    if (!editor) return;
+    insertPlainTextAtSelection(editor, text);
+    editor.dispatchEvent(new Event('input', { bubbles: true }));
   });
 
   container.addEventListener('drop', (event) => {
