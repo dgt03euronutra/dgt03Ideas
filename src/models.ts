@@ -26,6 +26,9 @@ export const PANEL_COLORS = [
   { name: 'Cielo', value: '#a9d9ef' },
   { name: 'Lavanda', value: '#c8b9f2' },
   { name: 'Menta', value: '#a9dfc4' },
+  { name: 'Rosa', value: '#efa0b8' },
+  { name: 'Turquesa', value: '#73c9be' },
+  { name: 'Amarillo', value: '#f0ce68' },
 ] as const;
 
 export function cleanText(value: string, maxLength: number): string {

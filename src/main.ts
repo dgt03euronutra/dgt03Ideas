@@ -97,6 +97,16 @@ function createPanel(): IdeaPanel {
   };
 }
 
+interface PanelResizeSession {
+  pointerId: number;
+  startX: number;
+  startColumns: number;
+  previewColumns: number;
+  pixelsPerColumn: number;
+  panelElement: HTMLElement;
+  handle: HTMLElement;
+}
+
 export function initIdeas(container: HTMLElement, repository: IdeasRepository): void {
   let projects: IdeaProject[] = [];
   let activeProjectId: string | null = null;
@@ -105,6 +115,7 @@ export function initIdeas(container: HTMLElement, repository: IdeasRepository): 
   let saveTimer: number | undefined;
   let feedback = '';
   let savedBoldRange: Range | null = null;
+  let resizeSession: PanelResizeSession | null = null;
 
   const activeProject = (): IdeaProject | undefined =>
     projects.find((project) => project.id === activeProjectId);
@@ -192,11 +203,6 @@ export function initIdeas(container: HTMLElement, repository: IdeasRepository): 
         <header class="idea-panel__header">
           <span class="idea-panel__index" draggable="true" title="Arrastra para ordenar" aria-label="Arrastra para ordenar">${String(index + 1).padStart(2, '0')}</span>
           <input class="idea-panel__title" data-field="title" value="${escapeHtml(panel.title)}" maxlength="${MAX_PANEL_TITLE}" placeholder="Título del panel" aria-label="Título del panel">
-          <label class="panel-width-control" title="Ancho del panel">
-            <span class="visually-hidden">Ancho del panel</span>
-            <input data-field="columns" type="range" min="3" max="9" value="${Math.max(3, Math.min(9, panel.columns))}" aria-label="Ancho del panel">
-            <span class="panel-width-control__value">${Math.max(3, Math.min(9, panel.columns))}/12</span>
-          </label>
           <div class="color-picker">
             <button class="color-picker__current" type="button" data-action="toggle-colors" title="Cambiar color" aria-label="Color del panel" aria-expanded="false" style="--swatch-color:${panel.color}"></button>
             <div class="color-picker__options" role="group" aria-label="Colores del panel" hidden>${PANEL_COLORS.map((color) => `<button class="color-swatch${panel.color === color.value ? ' color-swatch--selected' : ''}" type="button" data-action="set-color" data-color="${color.value}" title="${color.name}" aria-label="Color ${color.name}" aria-pressed="${panel.color === color.value}" style="--swatch-color:${color.value}"></button>`).join('')}</div>
@@ -205,6 +211,7 @@ export function initIdeas(container: HTMLElement, repository: IdeasRepository): 
           <button class="icon-button icon-button--danger idea-panel__delete" type="button" data-action="delete-panel" data-id="${escapeHtml(panel.id)}" title="Eliminar panel" aria-label="Eliminar panel">×</button>
         </header>
         <div class="idea-panel__text" data-field="text" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Texto de la idea" data-placeholder="Escribe una idea, una pregunta o cualquier nota...">${renderPanelText(panel.text)}</div>
+        <span class="idea-panel__resize-handle" role="separator" aria-orientation="vertical" aria-label="Arrastrar para cambiar el ancho del panel" aria-valuemin="3" aria-valuemax="9" aria-valuenow="${Math.max(3, Math.min(9, panel.columns))}" tabindex="0" title="Arrastra el borde para cambiar el ancho"></span>
       </article>`).join('');
 
     container.innerHTML = `
@@ -346,14 +353,87 @@ export function initIdeas(container: HTMLElement, repository: IdeasRepository): 
       updateBoldButton(target);
       fitEditor(target);
     }
-    if (target.dataset.field === 'columns' && target instanceof HTMLInputElement) {
-      panel.columns = Math.max(3, Math.min(9, Number(target.value)));
-      target.value = String(panel.columns);
-      const panelElement = target.closest<HTMLElement>('.idea-panel');
-      if (panelElement) panelElement.dataset.columns = String(panel.columns);
-      target.closest('.panel-width-control')?.querySelector('.panel-width-control__value')?.replaceChildren(`${panel.columns}/12`);
-    }
     scheduleSave(project);
+  });
+
+  const finishPanelResize = (commit: boolean): void => {
+    const session = resizeSession;
+    if (!session) return;
+    resizeSession = null;
+    session.panelElement.classList.remove('idea-panel--resizing');
+    session.panelElement.style.removeProperty('--resize-preview-offset');
+    delete session.panelElement.dataset.previewColumns;
+    session.handle.setAttribute('aria-valuenow', String(commit ? session.previewColumns : session.startColumns));
+    if (!commit || session.previewColumns === session.startColumns) return;
+    const project = activeProject();
+    const panel = project?.panels.find((item) => item.id === session.panelElement.dataset.panelId);
+    if (!project || !panel) return;
+    panel.columns = session.previewColumns;
+    session.panelElement.dataset.columns = String(panel.columns);
+    scheduleSave(project);
+  };
+
+  container.addEventListener('pointerdown', (event) => {
+    const target = event.target;
+    if (!(target instanceof Element) || event.button !== 0) return;
+    const handle = target.closest<HTMLElement>('.idea-panel__resize-handle');
+    const panelElement = handle?.closest<HTMLElement>('.idea-panel');
+    const board = container.querySelector<HTMLElement>('.board-grid');
+    const panel = panelElement && activeProject()?.panels.find((item) => item.id === panelElement.dataset.panelId);
+    if (!handle || !panelElement || !panel || !board) return;
+    event.preventDefault();
+    const startColumns = Math.max(3, Math.min(9, panel.columns));
+    resizeSession = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startColumns,
+      previewColumns: startColumns,
+      pixelsPerColumn: board.getBoundingClientRect().width / 12,
+      panelElement,
+      handle,
+    };
+    panelElement.classList.add('idea-panel--resizing');
+    panelElement.dataset.previewColumns = String(startColumns);
+    panelElement.style.setProperty('--resize-preview-offset', '0px');
+    handle.setAttribute('aria-valuenow', String(startColumns));
+    if (typeof handle.setPointerCapture === 'function') handle.setPointerCapture(event.pointerId);
+  });
+
+  container.addEventListener('pointermove', (event) => {
+    const session = resizeSession;
+    if (!session || event.pointerId !== session.pointerId) return;
+    const columnDelta = Math.round((event.clientX - session.startX) / session.pixelsPerColumn);
+    const previewColumns = Math.max(3, Math.min(9, session.startColumns + columnDelta));
+    if (previewColumns === session.previewColumns) return;
+    session.previewColumns = previewColumns;
+    session.panelElement.dataset.previewColumns = String(previewColumns);
+    session.panelElement.style.setProperty(
+      '--resize-preview-offset',
+      `${(previewColumns - session.startColumns) * session.pixelsPerColumn}px`,
+    );
+    session.handle.setAttribute('aria-valuenow', String(previewColumns));
+  });
+
+  container.addEventListener('pointerup', (event) => {
+    if (resizeSession?.pointerId === event.pointerId) finishPanelResize(true);
+  });
+
+  container.addEventListener('pointercancel', (event) => {
+    if (resizeSession?.pointerId === event.pointerId) finishPanelResize(false);
+  });
+
+  container.addEventListener('keydown', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement) || !target.classList.contains('idea-panel__resize-handle')) return;
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    const panelElement = target.closest<HTMLElement>('.idea-panel');
+    const panel = panelElement && activeProject()?.panels.find((item) => item.id === panelElement.dataset.panelId);
+    if (!panel || !panelElement) return;
+    event.preventDefault();
+    panel.columns = Math.max(3, Math.min(9, panel.columns + (event.key === 'ArrowRight' ? 1 : -1)));
+    panelElement.dataset.columns = String(panel.columns);
+    target.setAttribute('aria-valuenow', String(panel.columns));
+    scheduleSave(activeProject()!);
   });
 
   container.addEventListener('keydown', (event) => {
@@ -427,6 +507,10 @@ export function initIdeas(container: HTMLElement, repository: IdeasRepository): 
   container.addEventListener('dragstart', (event) => {
     const target = event.target;
     if (!(target instanceof Element)) return;
+    if (resizeSession) {
+      event.preventDefault();
+      return;
+    }
     if (!target.closest('.idea-panel__index')) return;
     const panel = target.closest<HTMLElement>('[data-panel-id]');
     if (!panel) return;

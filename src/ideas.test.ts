@@ -75,8 +75,9 @@ describe('tableros de ideas', () => {
 
     expect(editor.style.height).toBe('196px');
     expect(editor.closest('.idea-panel')?.querySelector('.idea-panel__header .color-picker__current')).toBeTruthy();
-    expect(container.querySelector<HTMLInputElement>('[data-field="columns"]')?.min).toBe('3');
-    expect(container.querySelector<HTMLInputElement>('[data-field="columns"]')?.max).toBe('9');
+    expect(container.querySelector<HTMLElement>('.idea-panel__resize-handle')?.getAttribute('role')).toBe('separator');
+    expect(container.querySelector<HTMLElement>('.idea-panel__resize-handle')?.getAttribute('aria-valuemin')).toBe('3');
+    expect(container.querySelector<HTMLElement>('.idea-panel__resize-handle')?.getAttribute('aria-valuemax')).toBe('9');
     expect(container.querySelector('.idea-panel__index')?.getAttribute('draggable')).toBe('true');
   });
 
@@ -130,16 +131,48 @@ describe('tableros de ideas', () => {
     await waitForUi();
     container.querySelector('[data-action="add-panel"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await waitForUi();
+    container.querySelector('[data-action="add-panel"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await waitForUi();
 
-    const widthControl = container.querySelector<HTMLInputElement>('[data-field="columns"]')!;
-    expect(widthControl.min).toBe('3');
-    expect(widthControl.max).toBe('9');
-    widthControl.value = '11';
-    widthControl.dispatchEvent(new Event('input', { bubbles: true }));
+    const handle = container.querySelector<HTMLElement>('.idea-panel__resize-handle')!;
+    const board = container.querySelector<HTMLElement>('.board-grid')!;
+    Object.defineProperty(board, 'getBoundingClientRect', { value: () => ({ width: 1200 }) });
+    const panel = handle.closest<HTMLElement>('.idea-panel')!;
+    const sibling = container.querySelectorAll<HTMLElement>('.idea-panel')[1];
+    const initialSiblingColumns = sibling.dataset.columns;
+    const pointerEvent = (type: string, values: { pointerId: number; clientX: number; button?: number }): Event => {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.entries(values).forEach(([key, value]) => Object.defineProperty(event, key, { value }));
+      return event;
+    };
 
-    expect(widthControl.value).toBe('9');
-    expect(widthControl.closest<HTMLElement>('.idea-panel')?.dataset.columns).toBe('9');
-    expect(widthControl.closest('.idea-panel')?.querySelector('.panel-width-control__value')?.textContent).toBe('9/12');
+    handle.dispatchEvent(pointerEvent('pointerdown', { pointerId: 4, clientX: 100, button: 0 }));
+    container.dispatchEvent(pointerEvent('pointermove', { pointerId: 4, clientX: 500 }));
+
+    expect(panel.dataset.columns).toBe('5');
+    expect(panel.dataset.previewColumns).toBe('9');
+    expect(panel.style.getPropertyValue('--resize-preview-offset')).toBe('400px');
+    expect(sibling.dataset.columns).toBe(initialSiblingColumns);
+
+    container.dispatchEvent(pointerEvent('pointerup', { pointerId: 4, clientX: 500 }));
+    expect(panel.dataset.columns).toBe('9');
+    expect(panel.dataset.previewColumns).toBeUndefined();
+  });
+
+  it('incluye ocho colores disponibles para los paneles', async () => {
+    const input = container.querySelector<HTMLInputElement>('#new-project-name')!;
+    input.value = 'Paleta';
+    container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await waitForUi();
+    container.querySelector('[data-action="add-panel"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await waitForUi();
+
+    container.querySelector('[data-action="toggle-colors"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    expect(container.querySelectorAll('.color-swatch')).toHaveLength(8);
+    expect(container.querySelector('[data-color="#efa0b8"]')).toBeTruthy();
+    expect(container.querySelector('[data-color="#73c9be"]')).toBeTruthy();
+    expect(container.querySelector('[data-color="#f0ce68"]')).toBeTruthy();
   });
 
   it('muestra un único color actual y permite abrir sus opciones', async () => {
