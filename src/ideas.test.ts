@@ -36,12 +36,24 @@ describe('tableros de ideas', () => {
 
   it('crea un proyecto y abre su tablero', async () => {
     const input = container.querySelector<HTMLInputElement>('#new-project-name')!;
+    expect(container.querySelector('.home-heading')).toBeNull();
+    expect(container.querySelector('.topbar .create-project')).toBeTruthy();
     input.value = 'Cuaderno de viaje';
     container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await waitForUi();
 
     expect(repository.projects[0].name).toBe('Cuaderno de viaje');
-    expect(container.querySelector('.board-view')?.textContent).toContain('Cuaderno de viaje');
+    expect(container.querySelector('.board-title-row h1')?.textContent).toBe('Cuaderno de viaje');
+    expect(container.querySelector('.board-title-row')?.textContent).not.toContain('panel de ideas');
+    expect(container.querySelector('.topbar .board-heading')).toBeNull();
+    expect(container.querySelector('.topbar [data-action="export-project"]')?.getAttribute('aria-label')).toBe('Exportar proyecto como texto plano');
+    expect(container.querySelector('.topbar [data-action="add-panel"]')?.textContent).toBe('+');
+    expect(container.querySelector('.breadcrumbs')).toBeNull();
+    expect(container.querySelector('.app-footer__identity')?.textContent).toBe('ESPACIO PERSONAL PRIVADO');
+    expect(container.querySelector('.app-footer__storage')?.textContent).toBe('Almacenamiento local');
+    expect(container.querySelector('.app-footer')?.textContent).not.toContain('cambios se guardan');
+    container.querySelector('.brand')!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    expect(container.querySelector('.home-view')).toBeTruthy();
   });
 
   it('mantiene las entradas como texto y no interpreta etiquetas HTML', async () => {

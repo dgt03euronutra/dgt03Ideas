@@ -169,24 +169,24 @@ export function initIdeas(container: HTMLElement, repository: IdeasRepository): 
 
     container.innerHTML = `
       <main class="ideas-shell">
-        <header class="topbar">
+        <header class="topbar topbar--home">
           <a class="brand" href="#" data-action="home"><span class="brand__mark" aria-hidden="true">i</span><span>ideas<span class="brand__period">.</span></span></a>
-          <span class="topbar__caption">ESPACIO PERSONAL</span>
-          <span class="topbar__local"><span></span> Almacenamiento local</span>
+          <form class="create-project" data-form="create-project">
+            <label class="visually-hidden" for="new-project-name">Nombre del proyecto</label>
+            <input id="new-project-name" name="name" maxlength="${MAX_PROJECT_NAME}" placeholder="Nombre del proyecto" required autocomplete="off">
+            <button class="button button--dark" type="submit" aria-label="Crear proyecto"><span aria-hidden="true">+</span><span class="create-project__label">Crear proyecto</span></button>
+          </form>
         </header>
         <section class="home-view">
-          <div class="home-heading">
-            <div><p class="eyebrow">TU ESPACIO DE TRABAJO</p><h1>Ideas en marcha<span>.</span></h1><p class="home-heading__description">Cada proyecto empieza con una página en blanco.</p></div>
-            <form class="create-project" data-form="create-project">
-              <label class="visually-hidden" for="new-project-name">Nombre del proyecto</label>
-              <input id="new-project-name" name="name" maxlength="${MAX_PROJECT_NAME}" placeholder="Nombre del proyecto" required autocomplete="off">
-              <button class="button button--dark" type="submit"><span aria-hidden="true">+</span> Crear proyecto</button>
-            </form>
-          </div>
           <div class="section-label"><h2>Proyectos</h2><span>${projects.length.toString().padStart(2, '0')}</span></div>
           <div class="project-list">${rows || '<div class="empty-state"><span class="empty-state__glyph" aria-hidden="true">✳</span><p>Aún no hay proyectos</p><span>Crea uno para empezar a reunir tus ideas.</span></div>'}</div>
-          <footer class="home-footer"><span>IDEAS · ESPACIO PRIVADO</span><span>Los cambios se guardan en este dispositivo</span></footer>
         </section>
+        <footer class="app-footer">
+          <div class="app-footer__inner">
+            <span class="app-footer__identity">ESPACIO PERSONAL PRIVADO</span>
+            <span class="app-footer__storage"><span class="app-footer__status-dot" aria-hidden="true"></span>Almacenamiento local</span>
+          </div>
+        </footer>
       </main>`;
   };
 
@@ -216,20 +216,24 @@ export function initIdeas(container: HTMLElement, repository: IdeasRepository): 
 
     container.innerHTML = `
       <main class="ideas-shell ideas-shell--board">
-        <header class="topbar">
+        <header class="topbar topbar--board">
           <a class="brand" href="#" data-action="home"><span class="brand__mark" aria-hidden="true">i</span><span>ideas<span class="brand__period">.</span></span></a>
-          <span class="topbar__caption">ESPACIO PERSONAL</span>
-          <span class="topbar__local"><span></span> Almacenamiento local</span>
-        </header>
-        <section class="board-view">
-          <nav class="breadcrumbs" aria-label="Ruta"><button type="button" data-action="home">Proyectos</button><span>/</span><span>${escapeHtml(project.name)}</span></nav>
-          <div class="board-heading">
-            <div><p class="eyebrow">PROYECTO</p><h1>${escapeHtml(project.name)}</h1><p class="board-heading__meta">${project.panels.length} ${project.panels.length === 1 ? 'panel de ideas' : 'paneles de ideas'}</p></div>
-            <div class="board-heading__actions"><span class="ideas__save-state" aria-live="polite">${feedback}</span><button class="button button--outline" type="button" data-action="export-project"><span aria-hidden="true">↓</span> Exportar .txt</button><button class="button button--lime" type="button" data-action="add-panel"><span aria-hidden="true">+</span> Nuevo panel</button></div>
+          <div class="topbar__actions">
+            <span class="ideas__save-state" aria-live="polite">${feedback}</span>
+            <button class="button button--outline button--icon" type="button" data-action="export-project" title="Exportar proyecto como TXT" aria-label="Exportar proyecto como texto plano"><span aria-hidden="true">↓</span></button>
+            <button class="button button--lime button--icon button--add-panel" type="button" data-action="add-panel" title="Nuevo panel" aria-label="Nuevo panel"><span aria-hidden="true">+</span></button>
           </div>
+        </header>
+        <div class="board-title-row"><h1>${escapeHtml(project.name)}</h1></div>
+        <section class="board-view">
           <div class="board-grid">${panels || '<div class="board-empty"><span aria-hidden="true">✳</span><p>Tu tablero está listo</p><span>Añade un panel para capturar la primera idea.</span><button class="button button--dark" type="button" data-action="add-panel">+ Añadir primer panel</button></div>'}</div>
-          <footer class="board-footer"><span>ORDENA TUS IDEAS</span><span>Arrastra el número del encabezado · El panel crece con el texto</span></footer>
         </section>
+        <footer class="app-footer">
+          <div class="app-footer__inner">
+            <span class="app-footer__identity">ESPACIO PERSONAL PRIVADO</span>
+            <span class="app-footer__storage"><span class="app-footer__status-dot" aria-hidden="true"></span>Almacenamiento local</span>
+          </div>
+        </footer>
       </main>`;
     container.querySelectorAll<HTMLElement>('.idea-panel__text').forEach(fitEditor);
   };
